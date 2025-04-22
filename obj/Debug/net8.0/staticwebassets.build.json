@@ -1,0 +1,12 @@
+{
+  "Version": 1,
+  "Hash": "yVUqWfckavK+8mAmKA2yt/kIfoYzWehaaELks9uG+8c=",
+  "Source": "MattermostBackend",
+  "BasePath": "_content/MattermostBackend",
+  "Mode": "Default",
+  "ManifestType": "Build",
+  "ReferencedProjectsConfiguration": [],
+  "DiscoveryPatterns": [],
+  "Assets": [],
+  "Endpoints": []
+}
