@@ -127,6 +127,16 @@
   },
   {
     "ContainingType": "MattermostBackend.Controllers.MattermostController",
+    "Method": "CloseTicketFromWebhook",
+    "RelativePath": "api/Mattermost/tickets/close",
+    "HttpMethod": "POST",
+    "IsController": true,
+    "Order": 0,
+    "Parameters": [],
+    "ReturnTypes": []
+  },
+  {
+    "ContainingType": "MattermostBackend.Controllers.MattermostController",
     "Method": "UploadTicket",
     "RelativePath": "api/Mattermost/upload",
     "HttpMethod": "POST",

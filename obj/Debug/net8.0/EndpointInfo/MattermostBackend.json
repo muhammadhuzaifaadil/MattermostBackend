@@ -36,6 +36,18 @@
         }
       }
     },
+    "/api/Mattermost/tickets/close": {
+      "post": {
+        "tags": [
+          "Mattermost"
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      }
+    },
     "/api/Mattermost/all": {
       "get": {
         "tags": [

@@ -10,6 +10,8 @@ using System.IO;
 using MattermostBackend.Context;
 using MattermostBackend.Models;
 using Microsoft.EntityFrameworkCore;
+using Newtonsoft.Json;
+using System.Text.RegularExpressions;
 
 namespace MattermostBackend.Controllers
 {
@@ -41,7 +43,8 @@ namespace MattermostBackend.Controllers
                 Detail = dto.Detail,
                 Severity = dto.Severity,
                 Location = dto.Location,
-                ChannelName = dto.ChannelName
+                ChannelName = dto.ChannelName,
+                Status = true
             };
 
             _context.Tickets.Add(ticket);
@@ -82,6 +85,105 @@ namespace MattermostBackend.Controllers
 
         //    return Ok(new { message = "Ticket created", ticketId = ticket.Id, ticketNo = ticket.TicketNo });
         //}
+
+        //[HttpPost("tickets/close")]
+        //public async Task<IActionResult> CloseTicketFromWebhook()
+        //{
+        //    var form = await Request.ReadFormAsync();
+
+        //    foreach (var key in form.Keys)
+        //    {
+        //        Console.WriteLine($"Key: {key}, Value: {form[key]}");
+        //    }
+        //    var text = form["text"].ToString();
+        //    var postId = form["post_id"].ToString();
+        //    var token = form["token"].ToString();
+
+        //    //if (string.IsNullOrEmpty(text) || string.IsNullOrEmpty(postId))
+        //    //    return BadRequest("Missing required fields");
+
+        //    if (!text.StartsWith("closeticket", StringComparison.OrdinalIgnoreCase))
+        //        return Ok(); // not our command
+
+        //    // Step 1: Get current post
+        //    var postDetails = await _httpClient.GetAsync($"https://matermost.finosys-sbs.com/api/v4/posts/{postId}");
+        //    var postJson = await postDetails.Content.ReadAsStringAsync();
+        //    var postData = JsonConvert.DeserializeObject<MattermostCloseResponse>(postJson);
+
+        //    var rootPostId = postData?.PostId;
+        //    if (string.IsNullOrEmpty(rootPostId))
+        //        return BadRequest("This is not a thread reply.");
+
+        //    // Step 2: Get parent/root post
+        //    var parentPostDetails = await _httpClient.GetAsync($"https://matermost.finosys-sbs.com/api/v4/posts/{rootPostId}");
+        //    var parentJson = await parentPostDetails.Content.ReadAsStringAsync();
+        //    var parentData = JsonConvert.DeserializeObject<MattermostCloseResponse>(parentJson);
+        //    var parentMessage = parentData?.Text;
+
+        //    var match = Regex.Match(parentMessage, @"TIC-\d+");
+        //    if (!match.Success)
+        //        return BadRequest("No ticket number found in parent post.");
+
+        //    string ticketNo = match.Value;
+
+        //    var ticket = await _context.Tickets.FirstOrDefaultAsync(t => t.TicketNo == ticketNo);
+        //    if (ticket == null) return NotFound("Ticket not found");
+
+        //    ticket.Status = false;
+        //    await _context.SaveChangesAsync();
+
+        //    return Ok($"✅ Ticket {ticketNo} has been closed.");
+        //}
+
+        [HttpPost("tickets/close")]
+        public async Task<IActionResult> CloseTicketFromWebhook()
+        {
+            var form = await Request.ReadFormAsync();
+
+            foreach (var key in form.Keys)
+            {
+                Console.WriteLine($"Key: {key}, Value: {form[key]}");
+            }
+
+            var text = form["text"].ToString();
+            var command = form["command"].ToString();
+            var responseUrl = form["response_url"].ToString();
+
+            if (!command.StartsWith("/closeticket", StringComparison.OrdinalIgnoreCase))
+                return Ok(); // ignore if not our command
+
+            var match = Regex.Match(text, @"TIC-\d+");
+            if (!match.Success)
+                return BadRequest("Please provide a valid ticket number like TIC-123");
+
+            string ticketNo = match.Value;
+
+            var ticket = await _context.Tickets.FirstOrDefaultAsync(t => t.TicketNo == ticketNo);
+            
+            if (ticket == null)
+                return NotFound($"Ticket {ticketNo} not found.");
+            if (ticket.Status == false)
+                return BadRequest($"Ticket: {ticketNo} has been closed");
+
+            ticket.Status = false;
+            await _context.SaveChangesAsync();
+
+            // ✅ Send a message to Mattermost using response_url
+            using (var httpClient = new HttpClient())
+            {
+                var message = new
+                {
+                    response_type = "in_channel", // visible to everyone in the channel
+                    text = $"Ticket **{ticketNo}** has been closed successfully by `{form["user_name"]}`."
+                };
+
+                var content = new StringContent(JsonConvert.SerializeObject(message), Encoding.UTF8, "application/json");
+                await httpClient.PostAsync(responseUrl, content);
+            }
+
+            return Ok(); // don't return text here, as message is sent via response_url
+        }
+
 
         private async Task SendToMattermost(string Channel, string message)
         {
@@ -132,7 +234,8 @@ namespace MattermostBackend.Controllers
                 Detail = t.Detail,
                 Severity = t.Severity,
                 Location = t.Location,
-                ChannelName = t.ChannelName
+                ChannelName = t.ChannelName,
+                Status = t.Status
             }).OrderByDescending(x=>x.Id);
 
             return Ok(response);
@@ -235,7 +338,7 @@ namespace MattermostBackend.Controllers
             };
 
             // Log the body to ensure the content is correctly formatted
-            var jsonBody = JsonSerializer.Serialize(body);
+            var jsonBody = System.Text.Json.JsonSerializer.Serialize(body);
             Console.WriteLine($"Sending message body: {jsonBody}");
 
             request.Content = new StringContent(jsonBody, Encoding.UTF8, "application/json");
@@ -271,7 +374,7 @@ namespace MattermostBackend.Controllers
             var content = await response.Content.ReadAsStringAsync();
 
             // Deserialize JSON response into ChannelDetails object
-            var channelDetails = JsonSerializer.Deserialize<ChannelDetails>(content);
+            var channelDetails = System.Text.Json.JsonSerializer.Deserialize<ChannelDetails>(content);
 
             return Ok(channelDetails); // Return the deserialized object
         }
@@ -299,7 +402,7 @@ namespace MattermostBackend.Controllers
             }
 
             var stream = await response.Content.ReadAsStreamAsync();
-            var result = await JsonSerializer.DeserializeAsync<MattermostPostsResponse>(stream, new JsonSerializerOptions
+            var result = await System.Text.Json.JsonSerializer.DeserializeAsync<MattermostPostsResponse>(stream, new JsonSerializerOptions
             {
                 PropertyNameCaseInsensitive = true
             });
@@ -309,6 +412,36 @@ namespace MattermostBackend.Controllers
 
 
     }
+    public class MattermostCloseResponse
+    {
+        [FromForm(Name = "channel_id")]
+        public string ChannelId { get; set; }
+
+        [FromForm(Name = "user_id")]
+        public string UserId { get; set; }
+
+        [FromForm(Name = "text")]
+        public string Text { get; set; }
+
+        [FromForm(Name = "team_id")]
+        public string TeamId { get; set; }
+
+        [FromForm(Name = "command")]
+        public string Command { get; set; }
+
+        [FromForm(Name = "token")]
+        public string Token { get; set; }
+
+        [FromForm(Name = "trigger_id")]
+        public string TriggerId { get; set; }
+
+        [FromForm(Name = "response_url")]
+        public string ResponseUrl { get; set; }
+
+        [FromForm(Name = "user_name")]
+        public string UserName { get; set; }
+    }
+
     public class MattermostPostsResponse
     {
         [JsonPropertyName("order")]

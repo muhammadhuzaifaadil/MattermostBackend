@@ -9,6 +9,7 @@
         public string? Detail { get; set; }
         public string? Severity { get; set; }
         public string? Location { get; set; }
+        public bool? Status { get; set; }
 
     }
 
