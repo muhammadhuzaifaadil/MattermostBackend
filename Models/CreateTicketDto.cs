@@ -2,6 +2,8 @@
 {
     public class CreateTicketDto
     {
+
+        //public string TeamName { get; set; }
         public string ChannelName { get; set; }
         public string Topic { get; set; }
         public string Detail { get; set; }

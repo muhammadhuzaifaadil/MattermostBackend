@@ -12,6 +12,7 @@ using MattermostBackend.Models;
 using Microsoft.EntityFrameworkCore;
 using Newtonsoft.Json;
 using System.Text.RegularExpressions;
+using System.Net.Http;
 
 namespace MattermostBackend.Controllers
 {
@@ -64,76 +65,7 @@ namespace MattermostBackend.Controllers
 
             return Ok(new { message = "Ticket created", ticketId = ticket.Id, ticketNo = ticket.TicketNo });
         }
-        //[HttpPost("upload")]
-        //public async Task<IActionResult> UploadTicket([FromBody] CreateTicketDto dto)
-        //{
-        //    // Generate the next TicketNo BEFORE inserting
-        //    string nextTicketNo = await GenerateNextTicketNo();
-
-        //    var ticket = new Ticket
-        //    {
-        //        TicketNo = nextTicketNo,
-        //        Topic = dto.Topic,
-        //        Detail = dto.Detail,
-        //        Severity = dto.Severity,
-        //        Location = dto.Location,
-        //        ChannelName = dto.ChannelName
-        //    };
-
-        //    _context.Tickets.Add(ticket);
-        //    await _context.SaveChangesAsync();
-
-        //    return Ok(new { message = "Ticket created", ticketId = ticket.Id, ticketNo = ticket.TicketNo });
-        //}
-
-        //[HttpPost("tickets/close")]
-        //public async Task<IActionResult> CloseTicketFromWebhook()
-        //{
-        //    var form = await Request.ReadFormAsync();
-
-        //    foreach (var key in form.Keys)
-        //    {
-        //        Console.WriteLine($"Key: {key}, Value: {form[key]}");
-        //    }
-        //    var text = form["text"].ToString();
-        //    var postId = form["post_id"].ToString();
-        //    var token = form["token"].ToString();
-
-        //    //if (string.IsNullOrEmpty(text) || string.IsNullOrEmpty(postId))
-        //    //    return BadRequest("Missing required fields");
-
-        //    if (!text.StartsWith("closeticket", StringComparison.OrdinalIgnoreCase))
-        //        return Ok(); // not our command
-
-        //    // Step 1: Get current post
-        //    var postDetails = await _httpClient.GetAsync($"https://matermost.finosys-sbs.com/api/v4/posts/{postId}");
-        //    var postJson = await postDetails.Content.ReadAsStringAsync();
-        //    var postData = JsonConvert.DeserializeObject<MattermostCloseResponse>(postJson);
-
-        //    var rootPostId = postData?.PostId;
-        //    if (string.IsNullOrEmpty(rootPostId))
-        //        return BadRequest("This is not a thread reply.");
-
-        //    // Step 2: Get parent/root post
-        //    var parentPostDetails = await _httpClient.GetAsync($"https://matermost.finosys-sbs.com/api/v4/posts/{rootPostId}");
-        //    var parentJson = await parentPostDetails.Content.ReadAsStringAsync();
-        //    var parentData = JsonConvert.DeserializeObject<MattermostCloseResponse>(parentJson);
-        //    var parentMessage = parentData?.Text;
-
-        //    var match = Regex.Match(parentMessage, @"TIC-\d+");
-        //    if (!match.Success)
-        //        return BadRequest("No ticket number found in parent post.");
-
-        //    string ticketNo = match.Value;
-
-        //    var ticket = await _context.Tickets.FirstOrDefaultAsync(t => t.TicketNo == ticketNo);
-        //    if (ticket == null) return NotFound("Ticket not found");
-
-        //    ticket.Status = false;
-        //    await _context.SaveChangesAsync();
-
-        //    return Ok($"✅ Ticket {ticketNo} has been closed.");
-        //}
+        
 
         [HttpPost("tickets/close")]
         public async Task<IActionResult> CloseTicketFromWebhook()
@@ -185,6 +117,32 @@ namespace MattermostBackend.Controllers
         }
 
 
+        [HttpGet("get-channels/{teamId}")]
+        public async Task<IActionResult> GetChannelsForTeam(string teamId)
+        {
+            var mattermostToken = MattermostToken; 
+
+            var request = new HttpRequestMessage(HttpMethod.Get, $"https://matermost.finosys-sbs.com/api/v4/teams/{teamId}/channels");
+            request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", mattermostToken);
+
+            var response = _httpClient.Send(request); // Assuming you use IHttpClientFactory
+            //var response = await client.SendAsync(request);
+
+            if (!response.IsSuccessStatusCode)
+            {
+                return StatusCode((int)response.StatusCode, "Failed to fetch channels from Mattermost");
+            }
+
+            var content = await response.Content.ReadAsStringAsync();
+            var channels = System.Text.Json.JsonSerializer.Deserialize<List<MattermostChannelDto>>(content, new JsonSerializerOptions
+            {
+                PropertyNamingPolicy = JsonNamingPolicy.CamelCase
+            });
+
+            return Ok(channels);
+        }
+
+
         private async Task SendToMattermost(string Channel, string message)
         {
             var payload = new
@@ -194,13 +152,43 @@ namespace MattermostBackend.Controllers
                 text = message
             };
 
-           var result =  await _httpClient.PostAsJsonAsync("http://matermost.finosys-sbs.com/hooks/u8okeire1pnofr3p1kfihr934w", payload);
-            if(result == null)
+            var result = await _httpClient.PostAsJsonAsync("https://matermost.finosys-sbs.com/hooks/7kgfirk1sbrepxibtag5otsiwe", payload); //Team SINA
+            if (result == null)
             {
                 return;
             }
 
         }
+        //private async Task SendToMattermost(string teamName, string channel, string message)
+        //{
+        //    string webhookUrl = teamName switch
+        //    {
+        //        "Finosys" => "http://matermost.finosys-sbs.com/hooks/u8okeire1pnofr3p1kfihr934w",
+        //        "SINA" => "https://matermost.finosys-sbs.com/hooks/wtbmppdtqfgydmymzrxstz5see",
+        //        "Ruhama" => "https://matermost.finosys-sbs.com/hooks/7x8j5g3f8h4y6q9z1k5j7r8t9a",
+        //        _ => null // default case if team not recognized
+        //    };
+
+        //    if (webhookUrl == null)
+        //    {
+        //        // Optionally log error or throw exception
+        //        throw new Exception($"No webhook URL configured for team: {teamName}");
+        //    }
+
+        //    var payload = new
+        //    {
+        //        channel = channel,
+        //        username = "TicketBot",
+        //        text = message
+        //    };
+
+        //    var result = await _httpClient.PostAsJsonAsync(webhookUrl, payload);
+        //    if (result == null)
+        //    {
+        //        return;
+        //    }
+        //}
+
 
         private async Task<string> GenerateNextTicketNo()
         {
