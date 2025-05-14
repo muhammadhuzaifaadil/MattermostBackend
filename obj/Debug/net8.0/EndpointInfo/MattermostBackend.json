@@ -293,6 +293,10 @@
           "location": {
             "type": "string",
             "nullable": true
+          },
+          "teamName": {
+            "type": "string",
+            "nullable": true
           }
         },
         "additionalProperties": false

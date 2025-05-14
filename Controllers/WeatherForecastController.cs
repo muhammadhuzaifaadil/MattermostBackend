@@ -61,8 +61,8 @@ namespace MattermostBackend.Controllers
                              $"**Location:** {ticket.Location}";
             //string message = $"New ticket Created";
 
-            // Send to Mattermost
-            await SendToMattermost(ticket.ChannelName, message);
+            // Send to Mattermost dto.TeamName
+            await SendToMattermost("ruhama",ticket.ChannelName, message);
 
             return Ok(new { message = "Ticket created", ticketId = ticket.Id, ticketNo = ticket.TicketNo });
         }
@@ -221,7 +221,7 @@ namespace MattermostBackend.Controllers
             public long LastRootPostAt { get; set; }
         }
 
-        private async Task SendToMattermost(string Channel, string message)
+        private async Task SendToMattermost(string TeamName,string Channel, string message)
         {
             var payload = new
             {
@@ -229,8 +229,16 @@ namespace MattermostBackend.Controllers
                 username = "TicketBot",
                 text = message
             };
-
-            var result = await _httpClient.PostAsJsonAsync("https://matermost.finosys-sbs.com/hooks/7kgfirk1sbrepxibtag5otsiwe", payload); //Team SINA
+            string webhookUrl = TeamName switch
+            {
+                "sina-healthcare" => "https://matermost.finosys-sbs.com/hooks/wtbmppdtqfgydmymzrxstz5see",
+                "ruhama" => "https://matermost.finosys-sbs.com/hooks/7kgfirk1sbrepxibtag5otsiwe",
+                "finosys" => "https://matermost.finosys-sbs.com/hooks/u8okeire1pnofr3p1kfihr934w",
+                
+                _ => null
+            };
+            //var result = await _httpClient.PostAsJsonAsync("https://matermost.finosys-sbs.com/hooks/wtbmppdtqfgydmymzrxstz5see", payload); //Team SINA
+            var result = await _httpClient.PostAsJsonAsync(webhookUrl, payload);
             if (result == null)
             {
                 return;
