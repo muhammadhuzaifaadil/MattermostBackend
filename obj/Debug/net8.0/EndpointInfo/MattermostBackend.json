@@ -48,6 +48,28 @@
         }
       }
     },
+    "/api/Mattermost/get-channels/{teamId}": {
+      "get": {
+        "tags": [
+          "Mattermost"
+        ],
+        "parameters": [
+          {
+            "name": "teamId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      }
+    },
     "/api/Mattermost/all": {
       "get": {
         "tags": [

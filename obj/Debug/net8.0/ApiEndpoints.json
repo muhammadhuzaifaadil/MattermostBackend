@@ -27,6 +27,22 @@
   },
   {
     "ContainingType": "MattermostBackend.Controllers.MattermostController",
+    "Method": "GetChannelsForTeam",
+    "RelativePath": "api/Mattermost/get-channels/{teamId}",
+    "HttpMethod": "GET",
+    "IsController": true,
+    "Order": 0,
+    "Parameters": [
+      {
+        "Name": "teamId",
+        "Type": "System.String",
+        "IsRequired": true
+      }
+    ],
+    "ReturnTypes": []
+  },
+  {
+    "ContainingType": "MattermostBackend.Controllers.MattermostController",
     "Method": "GetChannelDetails",
     "RelativePath": "api/Mattermost/getChannelId",
     "HttpMethod": "GET",

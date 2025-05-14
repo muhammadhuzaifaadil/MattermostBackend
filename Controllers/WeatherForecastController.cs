@@ -13,6 +13,7 @@ using Microsoft.EntityFrameworkCore;
 using Newtonsoft.Json;
 using System.Text.RegularExpressions;
 using System.Net.Http;
+using System;
 
 namespace MattermostBackend.Controllers
 {
@@ -23,14 +24,14 @@ namespace MattermostBackend.Controllers
         private readonly AppDbContext _context;
         private readonly HttpClient _httpClient;
         private readonly SmtpSettings _smtpSettings;
-        private const string MattermostToken = "gokcroshrp8pprgasm7pqj7jsc"; // Replace with your actual token
-
-        public MattermostController(AppDbContext context,HttpClient httpClient, IOptions<SmtpSettings> smtpSettings)
+        private readonly IConfiguration _configuration;
+      
+        public MattermostController(AppDbContext context,HttpClient httpClient, IOptions<SmtpSettings> smtpSettings, IConfiguration configuration)
         {
             _context = context;
             _httpClient = httpClient;
             _smtpSettings = smtpSettings.Value;
-
+            _configuration = configuration;
         }
         [HttpPost("upload")]
         public async Task<IActionResult> UploadTicket([FromBody] CreateTicketDto dto)
@@ -120,10 +121,9 @@ namespace MattermostBackend.Controllers
         [HttpGet("get-channels/{teamId}")]
         public async Task<IActionResult> GetChannelsForTeam(string teamId)
         {
-            var mattermostToken = MattermostToken; 
-
-            var request = new HttpRequestMessage(HttpMethod.Get, $"https://matermost.finosys-sbs.com/api/v4/teams/{teamId}/channels");
-            request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", mattermostToken);
+            var token = _configuration["Mattermost:PAToken"];
+            var request = new HttpRequestMessage(HttpMethod.Get, $"https://matermost.finosys-sbs.com/api/v4/users/me/teams/{teamId}/channels");
+            request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
 
             var response = _httpClient.Send(request); // Assuming you use IHttpClientFactory
             //var response = await client.SendAsync(request);
@@ -134,14 +134,92 @@ namespace MattermostBackend.Controllers
             }
 
             var content = await response.Content.ReadAsStringAsync();
-            var channels = System.Text.Json.JsonSerializer.Deserialize<List<MattermostChannelDto>>(content, new JsonSerializerOptions
+            var channels = System.Text.Json.JsonSerializer.Deserialize<List<ChannelLookupDto>>(content, new JsonSerializerOptions
             {
-                PropertyNamingPolicy = JsonNamingPolicy.CamelCase
+                PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+                  PropertyNameCaseInsensitive = true
             });
+            if (channels == null || channels.Count == 0)
+            {
+                return NotFound("No channels found");
+            }
 
-            return Ok(channels);
+            var result = channels
+               .Where(channel => channel.Type == "P" || channel.Type == "O")
+                .Select(channel => new
+            {
+                Id = channel.Id,
+                ChannelName = channel.Name,
+                Type = channel.Type
+            });
+            return Ok(result);
         }
+        
+        public class ChannelLookupDto
+        {
+            [JsonPropertyName("id")]
+            public string Id { get; set; }
 
+            [JsonPropertyName("create_at")]
+            public long CreateAt { get; set; }
+
+            [JsonPropertyName("update_at")]
+            public long UpdateAt { get; set; }
+
+            [JsonPropertyName("delete_at")]
+            public long DeleteAt { get; set; }
+
+            [JsonPropertyName("team_id")]
+            public string TeamId { get; set; }
+
+            [JsonPropertyName("type")]
+            public string Type { get; set; }
+
+            [JsonPropertyName("display_name")]
+            public string DisplayName { get; set; }
+
+            [JsonPropertyName("name")]
+            public string Name { get; set; }
+
+            [JsonPropertyName("header")]
+            public string Header { get; set; }
+
+            [JsonPropertyName("purpose")]
+            public string Purpose { get; set; }
+
+            [JsonPropertyName("last_post_at")]
+            public long LastPostAt { get; set; }
+
+            [JsonPropertyName("total_msg_count")]
+            public int TotalMsgCount { get; set; }
+
+            [JsonPropertyName("extra_update_at")]
+            public long ExtraUpdateAt { get; set; }
+
+            [JsonPropertyName("creator_id")]
+            public string CreatorId { get; set; }
+
+            [JsonPropertyName("scheme_id")]
+            public string SchemeId { get; set; }
+
+            [JsonPropertyName("props")]
+            public Dictionary<string, object> Props { get; set; }
+
+            [JsonPropertyName("group_constrained")]
+            public bool? GroupConstrained { get; set; }
+
+            [JsonPropertyName("shared")]
+            public bool? Shared { get; set; }
+
+            [JsonPropertyName("total_msg_count_root")]
+            public int TotalMsgCountRoot { get; set; }
+
+            [JsonPropertyName("policy_id")]
+            public string PolicyId { get; set; }
+
+            [JsonPropertyName("last_root_post_at")]
+            public long LastRootPostAt { get; set; }
+        }
 
         private async Task SendToMattermost(string Channel, string message)
         {
