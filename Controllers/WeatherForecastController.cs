@@ -62,7 +62,7 @@ namespace MattermostBackend.Controllers
             //string message = $"New ticket Created";
 
             // Send to Mattermost dto.TeamName
-            await SendToMattermost("ruhama",ticket.ChannelName, message);
+            await SendToMattermost(dto.TeamName,ticket.ChannelName, message);
 
             return Ok(new { message = "Ticket created", ticketId = ticket.Id, ticketNo = ticket.TicketNo });
         }
